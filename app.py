@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-from flask import Flask, render_template, request
+from flask import Flask
 import requests
 import pandas as pd
-from pandas.tseries.offsets import *
-import numpy as np
+# from pandas.tseries.offsets import *
 from flatten_dict import flatten
 from stravalib import Client
 import polyline
@@ -12,7 +11,6 @@ import json
 import datetime
 import urllib.parse
 import dash
-import dash_html_components as html
 import dash_leaflet as dl
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
@@ -32,18 +30,19 @@ app.layout = html.Div([
 ])
 
 index_page = html.Div([
-    html.A("Get Some Data!",
-           href="https://www.strava.com/oauth/authorize?client_id=32737&response_type=code&redirect_uri=https://www.giraffesinaboat.com/exchange_token&approval_prompt=force&scope=activity:read_all")
-])
+    html.A("Get Some Data!", href=(
+            "https://www.strava.com/oauth/authorize?client_id=32737"
+            "&response_type=code&redirect_uri=https://www.giraffesinaboat.com"
+            "/exchange_token&approval_prompt=force&scope=activity:read_all"))])
 
 local_timezone = datetime.datetime.now(datetime.timezone(datetime.timedelta(0))).astimezone().tzinfo
 dend = pd.Timestamp.today() + pd.DateOffset(years=1)
-datelist = pd.date_range(start='1/1/2009', end= dend, freq='Y', tz=local_timezone)
+datelist = pd.date_range(start='1/1/2009', end=dend, freq='Y', tz=local_timezone)
 maxmarks = len(datelist) - 1
 DLIST = pd.DatetimeIndex(datelist).normalize()
 TAGS = {}
-for idx,item in enumerate(DLIST):
-    TAGS[idx] = (item + DateOffset(months=1)).strftime('%Y')
+for idx, item in enumerate(DLIST):
+    TAGS[idx] = (item + pd.DateOffset(months=1)).strftime('%Y')
 
 page_1_layout = html.Div([
     dcc.Loading(
@@ -60,8 +59,7 @@ page_1_layout = html.Div([
                   html.Div(dcc.Dropdown(
                            id='dropdown2',
                            multi=True,
-                           placeholder="Select Gear"
-                  )),
+                           placeholder="Select Gear")),
                   html.Div(dcc.RangeSlider(
                            id='time-slider',
                            updatemode='mouseup',
@@ -69,17 +67,20 @@ page_1_layout = html.Div([
                            min=0,
                            max=maxmarks,
                            step=1,
-                           value=[0,maxmarks],
+                           value=[0, maxmarks],
                            marks=TAGS,
-                           pushable=1
-                  ))]
+                           pushable=1))]
     ),
     html.Div(id='test',
              style={'width': '100%',
                     'height': '600px',
                     'margin': 'auto',
-                    'display': 'block'}) 
+                    'display': 'block'})
 ])
+
+@server.route('/hello')
+def hello():
+    return 'hello world!'
 
 @app.callback(
     Output('page-content', 'children'),
@@ -124,7 +125,7 @@ def set_dropdown(ts, data):
 @app.callback(
     Output('dropdown2', 'options'),
     [Input('memory', 'modified_timestamp'),
-    Input('dropdown', 'value')],
+        Input('dropdown', 'value')],
     State('memory', 'data')
 )
 def set_dropdown2(ts, idx_list1, data):
@@ -143,20 +144,20 @@ def set_dropdown2(ts, idx_list1, data):
     Input('memory', 'modified_timestamp'),
     State('memory', 'data')
 )
-def set_dropdown(ts, data):
+def set_dropdown3(ts, data):
     if ts is None:
         raise PreventUpdate
     df = pd.DataFrame.from_dict(json.loads(data)['df'])
     first = pd.to_datetime(df['start_date_local'][-1])
-    pos = DLIST.get_loc(first , method='nearest') - 1
+    pos = DLIST.get_loc(first, method='nearest') - 1
     return pos
 
 @app.callback(
     Output('test', 'children'),
     [Input('dropdown', 'value'),
-    Input('dropdown2', 'value'),
-    Input('time-slider', 'value'),
-    Input('memory', 'modified_timestamp')],
+        Input('dropdown2', 'value'),
+        Input('time-slider', 'value'),
+        Input('memory', 'modified_timestamp')],
     State('memory', 'data')
 )
 def set_map(idx_list1, idx_list2, slider, ts, data):
@@ -167,7 +168,7 @@ def set_map(idx_list1, idx_list2, slider, ts, data):
     df = pd.DataFrame.from_dict(json.loads(data)['df'])
     # Limit by slider date
     df['start_date_local'] = pd.to_datetime(df['start_date_local'])
-    df = df[df['start_date_local'] > DLIST[slider[0]]] 
+    df = df[df['start_date_local'] > DLIST[slider[0]]]
     df = df[df['start_date_local'] < DLIST[slider[1]]]
     # Limit by activity and gear selection
     activity_types = json.loads(data)['activity_types']
@@ -181,17 +182,16 @@ def set_map(idx_list1, idx_list2, slider, ts, data):
     marker_pattern = dl.PolylineDecorator(children=data,
                                           patterns=patterns)
     return dl.Map([dl.TileLayer(), marker_pattern],
-                   id='map',
-                   #zoom=10,
-                   center=(latlng[0][0], latlng[0][1]))
+                    id='map',
+                    center=(latlng[0][0], latlng[0][1]))
 
 def get_relavent_gear(idx_list1, df, activity_types, gear_list):
     df = df.dropna()
     mid = []
-    for idx in idx_list1: 
+    for idx in idx_list1:
         mid.append(activity_types[idx]['label'])
     df_sub = df[df['type'].isin(mid)]
-    grouped = df_sub.groupby('type')['gear_id'].apply(lambda x: list(np.unique(x))).to_list()
+    grouped = df_sub.groupby('type')['gear_id'].apply(lambda x: list(set(x))).to_list()
     options = sum(grouped, [])
     subset_gear_list = []
     for gear_id in gear_list:
@@ -204,9 +204,9 @@ def get_headers(code):
     STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
     client = Client()
     access_dict = client.exchange_code_for_token(
-            client_id=STRAVA_CLIENT_ID,
-            client_secret=STRAVA_CLIENT_SECRET,
-            code=code)
+        client_id=STRAVA_CLIENT_ID,
+        client_secret=STRAVA_CLIENT_SECRET,
+        code=code)
     token = access_dict["access_token"]
     headers = {'Authorization': "Bearer {0}".format(token)}
     return headers
@@ -224,18 +224,14 @@ def get_gear_ids(df, headers):
     gear_ids = df.gear_id.unique().tolist()
     gear_list = []
     for idx, gear_id in enumerate(gear_ids):
-        if gear_id != None:
+        if gear_id is not None:
             gear_names = requests.get("https://www.strava.com/api/v3/gear/" + gear_id, headers=headers).json()
             gear_list.append({'label': gear_names['name'],
                               'value': gear_id})
     return gear_list
 
 def get_polylines(df, activity_types, idx_list1, gear_list, idx_list2):
-    raw_data = []
-    translate = {}
-    if idx_list1 == []:
-        raw_data = df['map/summary_polyline'].dropna().values.tolist()
-    else:
+    if idx_list1 != []:
         # Grab data by gear_id or type
         subset_gear_list = get_relavent_gear(idx_list1, df, activity_types, gear_list)
         if idx_list1 != [0]:
@@ -253,7 +249,7 @@ def get_polylines(df, activity_types, idx_list1, gear_list, idx_list2):
         lines.append(polyline.decode(item))
     data = dl.Polyline(positions=lines)
     latlng = lines[0]
-    return(data, latlng)
+    return data, latlng
 
 def get_data(headers):
     col_names = flatten(requests.get("https://www.strava.com/api/v3/"
@@ -281,6 +277,7 @@ def get_data(headers):
              'name',
              'gear_id']]
     return df
- 
+
+
 if __name__ == "__main__":
-    app.run_server(debug=True,host='0.0.0.0')
+    app.run_server(debug=True, host='0.0.0.0')
