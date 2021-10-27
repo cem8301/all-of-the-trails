@@ -197,7 +197,7 @@ def get_relavent_gear(idx_list1, df, activity_types, gear_list):
     for gear_id in gear_list:
         if gear_id['value'] in options:
             subset_gear_list.append(gear_id)
-    return(subset_gear_list)
+    return subset_gear_list
 
 def get_headers(code):
     STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
