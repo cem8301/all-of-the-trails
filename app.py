@@ -89,7 +89,6 @@ def hello():
 )
 def display_page(pathname, href):
     if pathname == '/exchange_token':
-        print('running with exchange token................................')
         return page_1_layout
     else:
         return index_page
@@ -100,10 +99,8 @@ def display_page(pathname, href):
     State('memory', 'data')
 )
 def get_user_data(href, data):
-    print(f'href: {href}')
     parsed_url = urllib.parse.urlparse(href)
     parsed_query = urllib.parse.parse_qs(parsed_url.query)
-    print(f'parsed_query: {parsed_query}')
     code = parsed_query['code'][0]
     headers = get_headers(code)
     df = get_data(headers)
@@ -200,17 +197,16 @@ def get_relavent_gear(idx_list1, df, activity_types, gear_list):
     for gear_id in gear_list:
         if gear_id['value'] in options:
             subset_gear_list.append(gear_id)
-    return subset_gear_list
+    return(subset_gear_list)
 
 def get_headers(code):
-    STRAVA_CLIENT_ID = "32737"#os.getenv("STRAVA_CLIENT_ID")
-    STRAVA_CLIENT_SECRET = "5e199aa78329b58e5753d1f7faffbabba3898d53"#os.getenv("STRAVA_CLIENT_SECRET")
+    STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
+    STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
     client = Client()
     access_dict = client.exchange_code_for_token(
         client_id=STRAVA_CLIENT_ID,
         client_secret=STRAVA_CLIENT_SECRET,
         code=code)
-    print(f'access_dict: {access_dict}')
     token = access_dict["access_token"]
     headers = {'Authorization': "Bearer {0}".format(token)}
     return headers
