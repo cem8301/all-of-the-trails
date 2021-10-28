@@ -17,6 +17,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 from dash.exceptions import PreventUpdate
 from dotenv import load_dotenv
+from threading import Thread
 
 load_dotenv()
 server = Flask(__name__)
@@ -31,9 +32,9 @@ app.layout = html.Div([
 
 index_page = html.Div([
     html.A("Get Some Data!", href=(
-            "https://www.strava.com/oauth/authorize?client_id=32737"
-            "&response_type=code&redirect_uri=https://www.giraffesinaboat.com"
-            "/exchange_token&approval_prompt=force&scope=activity:read_all"))])
+           "https://www.strava.com/oauth/authorize?client_id=32737"
+           "&response_type=code&redirect_uri=https://www.giraffesinaboat.com"
+           "/exchange_token&approval_prompt=force&scope=activity:read_all"))])
 
 local_timezone = datetime.datetime.now(datetime.timezone(datetime.timedelta(0))).astimezone().tzinfo
 dend = pd.Timestamp.today() + pd.DateOffset(years=1)
@@ -102,11 +103,11 @@ def get_user_data(href, data):
     parsed_url = urllib.parse.urlparse(href)
     parsed_query = urllib.parse.parse_qs(parsed_url.query)
     code = parsed_query['code'][0]
-    headers = get_headers(code)
-    df = get_data(headers)
-    activity_types = get_activity_types(df, headers)
-    gear_list = get_gear_ids(df, headers)
-    all_data = {'df': df.to_dict(),
+    sd = StravaData(code)
+    df = sd.get_data()
+    activity_types = sd.get_activity_types()
+    gear_list = sd.get_gear_ids()
+    all_data = {'df': df,
                 'activity_types': activity_types,
                 'gear_list': gear_list}
     return json.dumps(all_data)
@@ -182,8 +183,8 @@ def set_map(idx_list1, idx_list2, slider, ts, data):
     marker_pattern = dl.PolylineDecorator(children=data,
                                           patterns=patterns)
     return dl.Map([dl.TileLayer(), marker_pattern],
-                    id='map',
-                    center=(latlng[0][0], latlng[0][1]))
+                  id='map',
+                  center=(latlng[0][0], latlng[0][1]))
 
 def get_relavent_gear(idx_list1, df, activity_types, gear_list):
     df = df.dropna()
@@ -198,37 +199,6 @@ def get_relavent_gear(idx_list1, df, activity_types, gear_list):
         if gear_id['value'] in options:
             subset_gear_list.append(gear_id)
     return subset_gear_list
-
-def get_headers(code):
-    STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
-    STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
-    client = Client()
-    access_dict = client.exchange_code_for_token(
-        client_id=STRAVA_CLIENT_ID,
-        client_secret=STRAVA_CLIENT_SECRET,
-        code=code)
-    token = access_dict["access_token"]
-    headers = {'Authorization': "Bearer {0}".format(token)}
-    return headers
-
-def get_activity_types(df, headers):
-    types = df.type.unique().tolist()
-    activity_types = [{'label': 'All',
-                       'value': 0}]
-    for idx, each_type in enumerate(types):
-        activity_types.append({'label': each_type,
-                               'value': idx + 1})
-    return activity_types
-
-def get_gear_ids(df, headers):
-    gear_ids = df.gear_id.unique().tolist()
-    gear_list = []
-    for idx, gear_id in enumerate(gear_ids):
-        if gear_id is not None:
-            gear_names = requests.get("https://www.strava.com/api/v3/gear/" + gear_id, headers=headers).json()
-            gear_list.append({'label': gear_names['name'],
-                              'value': gear_id})
-    return gear_list
 
 def get_polylines(df, activity_types, idx_list1, gear_list, idx_list2):
     if idx_list1 != []:
@@ -251,32 +221,104 @@ def get_polylines(df, activity_types, idx_list1, gear_list, idx_list2):
     latlng = lines[0]
     return data, latlng
 
-def get_data(headers):
-    col_names = flatten(requests.get("https://www.strava.com/api/v3/"
-                                     "athlete/activities?page={0}".format(1),
-                                     headers=headers).json()[0],
-                                     reducer='path').keys()
-    df = pd.DataFrame(columns=col_names)
-    page = 1
-    while True:
-        response = requests.get("https://www.strava.com/api/v3/"
-                                "athlete/activities?page={0}".format(page),
-                                headers=headers).json()
+class Threader(Thread):
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs={}):
+        Thread.__init__(self, group, target, name, args, kwargs)
+        self.target = target
+        self.args = args
+        self.kwargs = kwargs
+        self._return = None
+
+    def run(self):
+        if self.target is not None:
+            self._return = self.target(*self.args,
+                                       **self.kwargs)
+
+    def join(self):
+        Thread.join(self)
+        return self._return
+
+class StravaData:
+    def __init__(self, code):
+        self.headers = self.get_headers(code)
+        self.col_names = ['map/summary_polyline',
+                          'start_date_local',
+                          'type',
+                          'name',
+                          'gear_id']
+        self.df = pd.DataFrame(columns=self.col_names)
+
+    def get_headers(self, code):
+        STRAVA_CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
+        STRAVA_CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
+        client = Client()
+        access_dict = client.exchange_code_for_token(
+            client_id=STRAVA_CLIENT_ID,
+            client_secret=STRAVA_CLIENT_SECRET,
+            code=code)
+        token = access_dict["access_token"]
+        headers = {'Authorization': "Bearer {0}".format(token)}
+        return headers
+
+    def get_activity_types(self):
+        types = self.df.type.unique().tolist()
+        activity_types = [{'label': 'All',
+                           'value': 0}]
+        for idx, each_type in enumerate(types):
+            activity_types.append({'label': each_type,
+                                   'value': idx + 1})
+        return activity_types
+
+    def get_data(self):
+        threads = list()
+        page = 1
+        num_threads = 6
+        ans = True
+        while ans:
+            for index in range(page, page + num_threads):
+                x = Threader(target=self.run_query, args=(index,))
+                threads.append(x)
+                x.start()
+            for index, thread in enumerate(threads):
+                ans = thread.join()
+            if not ans:
+                break
+            page += num_threads
+            if page > 300:
+                print('Page count is over 300 something may be wrong')
+                ans = False
+                break
+        return self.df.to_dict()
+
+    def run_query(self, page):
+        data = True
+        response = requests.get(f"https://www.strava.com/api/v3/"
+                                f"athlete/activities?page={page}",
+                                headers=self.headers).json()
+        for r in response:
+            r.pop('start_latlng', None)
+            r.pop('end_latlng', None)
+            df_tmp = pd.DataFrame(flatten(r, reducer='path'), index=[0])
+            df_tmp = df_tmp[self.col_names]
+            self.df = self.df.append(df_tmp, ignore_index=True)
+        print(f"Page {page} has {len(response)} data points")
         if len(response) == 0:
-            break
-        else:
-            for r in response:
-                r.pop('start_latlng', None)
-                r.pop('end_latlng', None)
-                df_tmp = pd.DataFrame(flatten(r, reducer='path'), index=[0])
-                df = df.append(df_tmp, ignore_index=True)
-        page += 1
-    df = df[['map/summary_polyline',
-             'start_date_local',
-             'type',
-             'name',
-             'gear_id']]
-    return df
+            print(f"Finished gathering data for page: {page}")
+            data = False
+        return data
+
+    def get_gear_ids(self):
+        gear_ids = self.df.gear_id.unique().tolist()
+        gear_list = []
+        for idx, gear_id in enumerate(gear_ids):
+            if gear_id is not None:
+                gear_names = requests.get(
+                    f"https://www.strava.com/api/v3/gear/{gear_id}",
+                    headers=self.headers).json()
+                gear_list.append({'label': gear_names['name'],
+                                  'value': gear_id})
+        return gear_list
 
 
 if __name__ == "__main__":
