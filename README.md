@@ -46,6 +46,7 @@ You will also need to setup security for your site. You can create an SSL certif
 Next create a new app. Instructions can be found [here](https://docs.digitalocean.com/products/app-platform/). This setup phase, will connect your forked all-of-the-trails repo to be part of app platform. App platform will run automatic builds every time you make a new PR and be made avaliable on your site. On step 2, add your 'STRAVA_CLIENT_ID' and 'STRAVA_CLIENT_SECRET' to the 'Environment Variables' so your code can run queries. Shown here: ![setting up app platform environment variables](https://github.com/cem8301/all-of-the-trails/blob/main/readme_support/do_env.png)
 
 Once your app has been created go to the settings page to finish linking up your domain. Make sure to add example.com AND www.example.com. The www is an alias to the first and a CNAME entry will be created in the DNS records. Mine looks like this: ![setting up app platform domains](https://github.com/cem8301/all-of-the-trails/blob/main/readme_support/do_domains.png)
+
 I found this piece to be very tricky. Again you must wait for propogation time before you know if it was done correctly.
 
 #### 6) See if it worked
@@ -54,6 +55,7 @@ Now everything is connected and should be live! Try navigating to your website. 
 
 ## Some more screen shots from the tool (Just for fun)
 I live full time in a van (since spring 2020) so it is fun to see where I have gone each year.
+
 My travels from 2020:
 ![All my activities from 2020](https://github.com/cem8301/all-of-the-trails/blob/main/readme_support/2020.png)
 
