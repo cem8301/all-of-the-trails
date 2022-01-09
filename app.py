@@ -273,7 +273,7 @@ class StravaData:
     def get_data(self):
         threads = list()
         page = 1
-        num_threads = 2
+        num_threads = 1
         ans = True
         while ans:
             for index in range(page, page + num_threads):
