@@ -39,7 +39,7 @@ index_page = html.Div([
 local_timezone = datetime.datetime.now(datetime.timezone(datetime.timedelta(0))).astimezone().tzinfo
 dend = pd.Timestamp.today() + pd.DateOffset(years=1)
 datelist = pd.date_range(start='1/1/2009', end=dend, freq='Y', tz=local_timezone)
-maxmarks = len(datelist)
+maxmarks = len(datelist) - 1
 DLIST = pd.DatetimeIndex(datelist).normalize()
 TAGS = {}
 for idx, item in enumerate(DLIST):
